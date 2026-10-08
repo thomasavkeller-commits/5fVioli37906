@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Violin Note Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Music&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf6f0; --card: #ffffff; --ink: #2b2420; --muted: #8a7f76;
+    --accent: #b5562b; --good: #2f9e5b; --bad: #d1443a;
+    --wood: #3a2418; --wood2: #4e3122; --string: #e9dcc5; --dot: #f6efe4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1714; --card: #26201c; --ink: #f2ebe3; --muted: #a39789;
+      --accent: #e0814f; --dot: #efe5d6;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Nunito", system-ui, sans-serif;
+    display: flex; justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    min-height: 100dvh; user-select: none;
+  }
+  .app { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 10px; }
+  header { display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 1.15rem; margin: 0; font-weight: 800; }
+  .stats { display: flex; gap: 12px; font-size: .85rem; color: var(--muted); }
+  .stats b { color: var(--ink); font-size: 1rem; }
+  .chiprow { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .chiprow::-webkit-scrollbar { display: none; }
+  .chiprow .tag { flex: 0 0 auto; font-size: .75rem; color: var(--muted); font-weight: 700; width: 50px; }
+  .chiprow button {
+    flex: 0 0 auto; border: 1.5px solid var(--muted); background: transparent; color: var(--ink);
+    border-radius: 999px; padding: 5px 11px; font: inherit; font-size: .85rem; font-weight: 700;
+  }
+  .chiprow button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card { background: var(--card); border-radius: 18px; padding: 8px 10px 4px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .keyname { text-align: center; font-size: .85rem; color: var(--muted); font-weight: 700; margin-top: 2px; }
+  svg.staff { width: 100%; height: auto; display: block; color: var(--ink); }
+  .feedback { min-height: 46px; text-align: center; font-weight: 700; font-size: 1rem; line-height: 1.3; }
+  .feedback small { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; }
+  .good { color: var(--good); } .bad { color: var(--bad); }
+
+  .board {
+    position: relative; background: linear-gradient(var(--wood2), var(--wood));
+    border-radius: 14px 14px 30px 30px; padding: 8px 10px 14px;
+  }
+  .nut { height: 6px; background: var(--string); border-radius: 3px; opacity: .8; margin: 4px 6px 6px; }
+  .grid { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); row-gap: 8px; }
+  .strings { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr); pointer-events: none; }
+  .strings span { justify-self: center; background: var(--string); opacity: .7; }
+  .strings span:nth-child(1) { width: 3.5px; } .strings span:nth-child(2) { width: 2.8px; }
+  .strings span:nth-child(3) { width: 2.2px; } .strings span:nth-child(4) { width: 1.6px; }
+  .label { text-align: center; color: var(--string); font-weight: 800; font-size: .9rem; position: relative; }
+  .pos {
+    justify-self: center; position: relative; width: 46px; height: 46px; border-radius: 50%;
+    border: none; background: var(--dot); color: #3a2418; font: inherit; font-weight: 800; font-size: 1rem;
+    box-shadow: 0 2px 0 rgba(0,0,0,.35); transition: transform .08s, background .2s;
+  }
+  .pos.open { background: transparent; border: 2.5px solid var(--dot); color: var(--dot); }
+  .pos:active { transform: scale(.92); }
+  .pos.right { background: var(--good) !important; color: #fff !important; border-color: var(--good) !important; }
+  .pos.wrong { background: var(--bad) !important; color: #fff !important; border-color: var(--bad) !important; }
+  .bottom { display: flex; gap: 8px; }
+  .bottom button {
+    flex: 1; border: none; border-radius: 12px; padding: 12px; font: inherit; font-weight: 800;
+    background: var(--card); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .bottom button.primary { background: var(--accent); color: #fff; }
+  .hint { font-size: .78rem; color: var(--muted); text-align: center; margin: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>🎻 Note Trainer</h1>
+    <div class="stats">
+      <span>Score <b id="score">0/0</b></span>
+      <span>Streak <b id="streak">0</b></span>
+    </div>
+  </header>
+
+  <div class="chiprow" id="keys">
+    <span class="tag">Key</span>
+    <button data-k="C" class="on">C</button>
+    <button data-k="G">G</button>
+    <button data-k="D">D</button>
+    <button data-k="A">A</button>
+    <button data-k="F">F</button>
+    <button data-k="Bb">B♭</button>
+    <button data-k="mix">Mixed</button>
+  </div>
+  <div class="chiprow" id="levels">
+    <span class="tag">Strings</span>
+    <button data-l="open">Open</button>
+    <button data-l="gd">G &amp; D</button>
+    <button data-l="ae">A &amp; E</button>
+    <button data-l="all" class="on">All</button>
+  </div>
+
+  <div class="card">
+    <div class="keyname" id="keyname"></div>
+    <svg class="staff" id="staff" viewBox="0 0 320 160"></svg>
+  </div>
+
+  <div class="feedback" id="fb">Where do you play this note?</div>
+
+  <div class="board">
+    <div class="grid" id="labels"></div>
+    <div class="nut"></div>
+    <div class="grid" id="grid">
+      <div class="strings"><span></span><span></span><span></span><span></span></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <button id="sound">🔊 Sound on</button>
+    <button id="next" class="primary">Skip ›</button>
+  </div>
+  <p class="hint">0 = open string · 1–4 = finger · first position</p>
+</div>
+
+<script>
+// ---------- music data ----------
+const STRINGS = [['G', 55], ['D', 62], ['A', 69], ['E', 76]]; // open string MIDI numbers
+const LETTERS = 'CDEFGAB';
+const SEMIS = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+const KEYS = {
+  C:  { name: 'C major',  acc: {},                 sig: [] },
+  G:  { name: 'G major',  acc: { F:1 },            sig: ['#F'] },
+  D:  { name: 'D major',  acc: { F:1, C:1 },       sig: ['#F','#C'] },
+  A:  { name: 'A major',  acc: { F:1, C:1, G:1 },  sig: ['#F','#C','#G'] },
+  F:  { name: 'F major',  acc: { B:-1 },           sig: ['bB'] },
+  Bb: { name: 'B♭ major', acc: { B:-1, E:-1 },     sig: ['bB','bE'] },
+};
+// where each accidental sits on the treble staff (steps above bottom line E4)
+const SIG_STEP = { '#F':8, '#C':5, '#G':9, 'bB':4, 'bE':7 };
+const NATURALS = ['G3','A3','B3','C4','D4','E4','F4','G4','A4','B4','C5','D5','E5','F5','G5','A5','B5'];
+
+// semitones above the open string -> finger(s) in first position
+const FINGERS = { 0:[0], 1:[1], 2:[1], 3:[2], 4:[2], 5:[3], 6:[3,4], 7:[4] };
+const TIPS = {
+  '1,1': 'low 1 — close to the nut',
+  '2,3': 'low 2 — snug against 1st finger',
+  '2,4': 'high 2 — snug against 3rd finger',
+  '3,6': 'high 3 — or low 4',
+  '4,6': 'low 4 — or high 3',
+};
+
+function buildNotes(k) {
+  const acc = KEYS[k].acc;
+  return NATURALS.map(nat => {
+    const letter = nat[0], oct = +nat[1], a = acc[letter] || 0;
+    const midi = 12 * (oct + 1) + SEMIS[letter] + a;
+    const answers = [];
+    let tip = '';
+    STRINGS.forEach(([s, open]) => {
+      const off = midi - open;
+      (FINGERS[off] || []).forEach(f => {
+        answers.push([s, f]);
+        if (TIPS[f + ',' + off] && !tip) tip = TIPS[f + ',' + off];
+      });
+    });
+    const pretty = letter + (a > 0 ? '♯' : a < 0 ? '♭' : '') + '<sub>' + oct + '</sub>';
+    return { nat, midi, answers, tip, pretty, key: k };
+  }).filter(n => n.answers.length);
+}
+
+const LEVELS = {
+  open: n => n.answers.some(a => a[1] === 0),
+  gd:   n => n.answers.some(a => a[0] === 'G' || a[0] === 'D'),
+  ae:   n => n.answers.some(a => a[0] === 'A' || a[0] === 'E'),
+  all:  () => true,
+};
+
+let level = 'all', keySel = 'C', current = null, last = null, locked = false;
+let right = 0, total = 0, streak = 0, soundOn = true, actx = null;
+
+// ---------- staff drawing ----------
+const diat = name => (+name[1]) * 7 + LETTERS.indexOf(name[0]);
+const STEP = 7, BOTTOM_Y = 112;
+const yOf = step => BOTTOM_Y - step * STEP;
+const MUSIC_FONT = "'Noto Music','Bravura','Apple Symbols','Segoe UI Symbol',serif";
+
+function drawStaff(note, color) {
+  const svg = document.getElementById('staff');
+  let s = '';
+  for (let i = 0; i < 5; i++) {
+    const y = yOf(i * 2);
+    s += `<line x1="10" x2="310" y1="${y}" y2="${y}" stroke="currentColor" stroke-width="1.3"/>`;
+  }
+  s += `<text x="14" y="${yOf(2) + 22}" font-family="${MUSIC_FONT}" font-size="76" fill="currentColor">𝄞</text>`;
+  // key signature
+  KEYS[note.key].sig.forEach((acc, i) => {
+    const y = yOf(SIG_STEP[acc]);
+    const glyph = acc[0] === '#' ? '♯' : '♭';
+    const dy = acc[0] === '#' ? 7 : 4;
+    s += `<text x="${64 + i * 12}" y="${y + dy}" font-family="${MUSIC_FONT}" font-size="22" fill="currentColor">${glyph}</text>`;
+  });
+  // note
+  const step = diat(note.nat) - diat('E4');
+  const x = 205, y = yOf(step);
+  for (let l = -2; l >= step; l -= 2)
+    s += `<line x1="${x-17}" x2="${x+17}" y1="${yOf(l)}" y2="${yOf(l)}" stroke="currentColor" stroke-width="1.3"/>`;
+  for (let l = 10; l <= step; l += 2)
+    s += `<line x1="${x-17}" x2="${x+17}" y1="${yOf(l)}" y2="${yOf(l)}" stroke="currentColor" stroke-width="1.3"/>`;
+  const c = color || 'currentColor';
+  s += `<ellipse cx="${x}" cy="${y}" rx="9.5" ry="6.8" transform="rotate(-20 ${x} ${y})" fill="${c}"/>`;
+  s += step >= 4
+    ? `<line x1="${x-8.6}" x2="${x-8.6}" y1="${y+2}" y2="${y+48}" stroke="${c}" stroke-width="1.8"/>`
+    : `<line x1="${x+8.6}" x2="${x+8.6}" y1="${y-2}" y2="${y-48}" stroke="${c}" stroke-width="1.8"/>`;
+  svg.innerHTML = s;
+
+  const k = KEYS[note.key];
+  const accs = k.sig.map(a => a[1] + (a[0] === '#' ? '♯' : '♭')).join(', ');
+  document.getElementById('keyname').textContent = k.name + (accs ? ' · ' + accs : ' · no sharps or flats');
+}
+
+// ---------- fingerboard ----------
+const labels = document.getElementById('labels');
+STRINGS.forEach(([st]) => labels.insertAdjacentHTML('beforeend', `<div class="label">${st}</div>`));
+const grid = document.getElementById('grid');
+for (let f = 0; f <= 4; f++) {
+  STRINGS.forEach(([st]) => {
+    const b = document.createElement('button');
+    b.className = 'pos' + (f === 0 ? ' open' : '');
+    b.textContent = f;
+    b.dataset.s = st; b.dataset.f = f;
+    b.onclick = () => answer(b);
+    grid.appendChild(b);
+  });
+}
+
+// ---------- sound ----------
+function play(midi) {
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+    f.type = 'lowpass'; f.frequency.value = 2200;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.18, t + 0.08);
+    g.gain.setValueAtTime(0.18, t + 0.6);
+    g.gain.linearRampToValueAtTime(0, t + 0.9);
+    o.connect(f); f.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t + 0.95);
+  } catch (e) {}
+}
+
+// ---------- game ----------
+const fb = document.getElementById('fb');
+const nextBtn = document.getElementById('next');
+const describe = n => {
+  const seen = new Set();
+  return n.answers.filter(([s, f]) => {
+    const id = s + (f === 0 ? 0 : 1); // don't list "3 or 4" on the same string twice
+    if (seen.has(id) && f !== 0) return false; seen.add(id); return true;
+  }).map(([s, f]) => f === 0 ? `open ${s}` : `${s} string, finger ${f}`).join(' or ');
+};
+
+function newNote() {
+  const keys = keySel === 'mix' ? Object.keys(KEYS) : [keySel];
+  const k = keys[Math.floor(Math.random() * keys.length)];
+  const pool = buildNotes(k).filter(LEVELS[level]);
+  if (!pool.length) { fb.textContent = 'No notes for this combo — try another.'; return; }
+  do { current = pool[Math.floor(Math.random() * pool.length)]; }
+  while (pool.length > 1 && last && current.nat === last.nat && current.key === last.key);
+  last = current; locked = false;
+  grid.querySelectorAll('.pos').forEach(b => b.classList.remove('right', 'wrong'));
+  drawStaff(current);
+  fb.innerHTML = 'Where do you play this note?';
+  nextBtn.textContent = 'Skip ›';
+}
+
+function answer(btn) {
+  if (locked || !current) return;
+  locked = true; total++;
+  const ok = current.answers.some(([s, f]) => s === btn.dataset.s && f === +btn.dataset.f);
+  const tip = current.tip ? `<small>${current.tip}</small>` : '';
+  play(current.midi);
+  if (ok) {
+    right++; streak++;
+    btn.classList.add('right');
+    drawStaff(current, 'var(--good)');
+    fb.innerHTML = `<span class="good">✓ ${current.pretty} — ${describe(current)}</span>${tip}`;
+    setTimeout(newNote, 1400);
+  } else {
+    streak = 0;
+    btn.classList.add('wrong');
+    current.answers.forEach(([s, f]) =>
+      grid.querySelector(`.pos[data-s="${s}"][data-f="${f}"]`).classList.add('right'));
+    drawStaff(current, 'var(--bad)');
+    fb.innerHTML = `<span class="bad">✗ That's ${current.pretty} — ${describe(current)}</span>${tip}`;
+    nextBtn.textContent = 'Next ›';
+  }
+  document.getElementById('score').textContent = `${right}/${total}`;
+  document.getElementById('streak').textContent = streak;
+}
+
+nextBtn.onclick = newNote;
+document.getElementById('sound').onclick = e => {
+  soundOn = !soundOn;
+  e.target.textContent = soundOn ? '🔊 Sound on' : '🔇 Sound off';
+};
+function chips(id, attr, set) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); set(b.dataset[attr]); last = null; newNote();
+  });
+}
+chips('keys', 'k', v => keySel = v);
+chips('levels', 'l', v => level = v);
+
+newNote();
+</script>
+</body>
+</html>
